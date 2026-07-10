@@ -109,8 +109,15 @@ Singleton (`id = "singleton"`) para flags de controle (ex: `ultimoCheckDiario`).
 ```
 app/
   layout.tsx              — layout raiz
-  page.tsx                — (será redirect para /lancamentos na Fase 2)
-  lancamentos/page.tsx    — Fase 2: tabela principal
+  page.tsx                — redirect para /lancamentos
+  globals.css             — classes utilitárias: input-field, btn-primary, btn-secondary, th, td, label, btn-page
+  lancamentos/
+    page.tsx              — Server Component: lê searchParams, chama actions em paralelo, passa props
+    _components/
+      FiltrosLancamentos.tsx   — Client: barra de filtros (9 campos), atualiza URL ao submeter
+      TabelaLancamentos.tsx    — Client: tabela com totais, edição inline, paginação por URL
+      FormLancamento.tsx       — Client: form criar/editar usando useActionState
+      BotaoNovoLancamento.tsx  — Client: toggle que abre FormLancamento para criação
   cartoes/page.tsx        — Fase 3: gestão de cartões
   indicadores/page.tsx    — Fase 6: ROAS e métricas
   configuracoes/page.tsx  — Fase 6: configurações
@@ -120,7 +127,10 @@ lib/
   prisma.ts               — singleton do PrismaClient (libsql adapter)
   logic.ts                — funções puras de negócio (sem I/O)
   parser.ts               — parsers regex para OCR (Fase 5)
-  actions/                — Server Actions (Fase 2+)
+  actions/
+    lancamentos.ts        — listarLancamentos, criarLancamento, editarLancamento, cancelarLancamento
+    categorias.ts         — listarCategorias
+    cartoes.ts            — listarCartoes
   extrator/
     index.ts              — interface ExtratorDeNota + stubs QrCode e OCR
 
@@ -184,7 +194,7 @@ abrem em amarelo para revisão manual; a confirmação manual atualiza `RegraDes
 | Fase | Descrição | Status |
 |---|---|---|
 | **1** | Setup: Prisma + schema + seed + estrutura de pastas + CLAUDE.md | ✅ Concluída |
-| **2** | Tabela de lançamentos com CRUD completo, filtros (tipo, escopo, categoria, data, status) e totais por período | 🔜 |
+| **2** | Tabela de lançamentos com CRUD completo, filtros (tipo, escopo, categoria, data, status) e totais por período | ✅ Concluída |
 | **3** | Cartões: gestão de cartões, parcelamento via cartão de crédito, visão de fatura por competência | 🔜 |
 | **4** | Antecipação e recebíveis: formulário próprio, geração de par ENTRADA+TAXA, cancelamento de recebíveis | 🔜 |
 | **5** | Leitura de foto em cascata: QR Code (jsQR) → OCR (Tesseract.js) → sugestão por RegraDesignacao | 🔜 |
