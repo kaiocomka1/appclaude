@@ -7,16 +7,34 @@
  * garantida pelo grupoId + upsert no nível de persistência).
  */
 
-import type { Cartao, Lancamento } from "@/app/generated/prisma/client";
+import {
+  TipoLancamento,
+  StatusLancamento,
+  OrigemLancamento,
+} from "@/app/generated/prisma/enums";
 
 // ---------------------------------------------------------------------------
 // Tipos auxiliares
 // ---------------------------------------------------------------------------
 
-export type LancamentoParaCriar = Omit<
-  Lancamento,
-  "id" | "criadoEm" | "atualizadoEm" | "cartao" | "categoria"
->;
+/** Tipo plano para criar lançamentos — sem Decimal, sem relações. */
+export type LancamentoParaCriar = {
+  tipo: string;
+  escopo: string;
+  categoriaId: string;
+  descricao: string;
+  valor: number;
+  data: Date;
+  formaPagamento: string;
+  cartaoId: string | null;
+  parcela: number | null;
+  totalParcelas: number | null;
+  grupoId: string | null;
+  status: string;
+  origem: string;
+  anexoUrl: string | null;
+  hashAnexo: string | null;
+};
 
 export type EfeitoLancamento = {
   lancamentos: LancamentoParaCriar[];
@@ -25,32 +43,112 @@ export type EfeitoLancamento = {
 };
 
 // ---------------------------------------------------------------------------
-// Funções previstas — implementadas na Fase 3+
+// Helpers de data
 // ---------------------------------------------------------------------------
 
 /**
- * Dado um lançamento de SAIDA com CARTAO_CREDITO, retorna os N lançamentos
- * de parcela que devem ser criados, calculando a competência correta por
- * diaFechamento do cartão.
+ * Calcula a data de vencimento de uma parcela (dia = diaFechamento do mês
+ * de competência). Hora fixa 12:00 UTC para evitar drift de fuso.
  *
- * Regra: se a data da compra é após o diaFechamento, a 1ª parcela cai na
- * fatura do mês seguinte.
+ * Regra: se o dia da compra for APÓS o diaFechamento, a 1ª parcela cai no
+ * mês seguinte. Cada parcela subsequente avança mais um mês.
  */
-export function calcularParcelasCartao(
-  _lancamento: LancamentoParaCriar,
-  _cartao: Cartao,
-  _grupoId: string,
-): LancamentoParaCriar[] {
-  // TODO Fase 3
-  throw new Error("Não implementado");
+function dataParcela(
+  dataCompra: Date,
+  diaFechamento: number,
+  numeroParcela: number, // 1-indexed
+): Date {
+  const diaCompra = dataCompra.getUTCDate();
+  const mesCompra = dataCompra.getUTCMonth(); // 0-indexed
+  const anoCompra = dataCompra.getUTCFullYear();
+
+  // Se compra ocorreu após o fechamento, pula para o próximo ciclo
+  const offsetBase = diaCompra > diaFechamento ? 1 : 0;
+  const totalOffset = offsetBase + (numeroParcela - 1);
+
+  const mesAbsoluto = mesCompra + totalOffset;
+  const anoAlvo = anoCompra + Math.floor(mesAbsoluto / 12);
+  const mesAlvo = mesAbsoluto % 12; // 0-indexed
+
+  // Garante que o dia não ultrapasse o último dia do mês alvo
+  const ultimoDia = new Date(Date.UTC(anoAlvo, mesAlvo + 1, 0)).getUTCDate();
+  const dia = Math.min(diaFechamento, ultimoDia);
+
+  return new Date(Date.UTC(anoAlvo, mesAlvo, dia, 12, 0, 0, 0));
 }
 
+// ---------------------------------------------------------------------------
+// Fase 3: Cartão de crédito
+// ---------------------------------------------------------------------------
+
 /**
- * Registrar antecipação: recebe valor bruto + valor líquido + data.
- * Retorna dois lançamentos (ENTRADA bruto categoria ANTECIPACAO +
- * SAIDA taxa categoria TAXA_ANTECIPACAO) com mesmo grupoId.
- * Se recebivelIds fornecidos, retorna também os IDs para cancelar.
+ * Dado uma compra com CARTAO_CREDITO, retorna os N lançamentos de parcela
+ * que devem ser criados, calculando a competência correta por diaFechamento.
+ *
+ * 1ª parcela = CONFIRMADO; demais = PREVISTO. Todas compartilham grupoId.
  */
+export function calcularParcelasCartao(params: {
+  categoriaId: string;
+  escopo: string;
+  descricao: string;
+  valor: number;
+  dataCompra: Date;
+  formaPagamento: string;
+  cartaoId: string;
+  diaFechamento: number;
+  totalParcelas: number;
+  grupoId: string;
+  origem?: string;
+}): LancamentoParaCriar[] {
+  const {
+    categoriaId,
+    escopo,
+    descricao,
+    valor,
+    dataCompra,
+    formaPagamento,
+    cartaoId,
+    diaFechamento,
+    totalParcelas,
+    grupoId,
+    origem = OrigemLancamento.MANUAL,
+  } = params;
+
+  // Distribui valor com arredondamento; última parcela absorve o centavo
+  const valorParcela = Math.round((valor / totalParcelas) * 100) / 100;
+  const valorUltima =
+    Math.round((valor - valorParcela * (totalParcelas - 1)) * 100) / 100;
+
+  return Array.from({ length: totalParcelas }, (_, i) => {
+    const numero = i + 1;
+    return {
+      tipo: TipoLancamento.SAIDA,
+      escopo,
+      categoriaId,
+      descricao:
+        totalParcelas === 1
+          ? descricao
+          : `${descricao} (${numero}/${totalParcelas})`,
+      valor: numero === totalParcelas ? valorUltima : valorParcela,
+      data: dataParcela(dataCompra, diaFechamento, numero),
+      formaPagamento,
+      cartaoId,
+      parcela: totalParcelas > 1 ? numero : null,
+      totalParcelas: totalParcelas > 1 ? totalParcelas : null,
+      grupoId,
+      status:
+        numero === 1 ? StatusLancamento.CONFIRMADO : StatusLancamento.PREVISTO,
+      origem,
+      anexoUrl: null,
+      hashAnexo: null,
+    };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Fase 4+: Stubs
+// ---------------------------------------------------------------------------
+
 export function calcularAntecipacao(params: {
   valorBruto: number;
   valorLiquido: number;
@@ -66,10 +164,6 @@ export function calcularAntecipacao(params: {
   throw new Error("Não implementado");
 }
 
-/**
- * Venda parcelada via plataforma: gera N ENTRADAS previstas (recebíveis)
- * + 1 SAIDA de TAXA_PLATAFORMA, com grupoId comum.
- */
 export function calcularVendaPlataforma(params: {
   valorBruto: number;
   taxaPercentual: number;
@@ -85,13 +179,8 @@ export function calcularVendaPlataforma(params: {
   throw new Error("Não implementado");
 }
 
-/**
- * Verifica lançamentos PREVISTOS vencidos (data < hoje) e retorna os IDs
- * que devem receber um badge de "atrasado" (sem mudar status).
- * Idempotente: pode ser chamada múltiplas vezes sem efeito cumulativo.
- */
 export function identificarPrevistoAtrasado(
-  lancamentos: Pick<Lancamento, "id" | "status" | "data">[],
+  lancamentos: Array<{ id: string; status: string; data: Date }>,
   hoje: Date,
 ): string[] {
   // TODO Fase 6 (runDailyChecks)
@@ -100,28 +189,20 @@ export function identificarPrevistoAtrasado(
   throw new Error("Não implementado");
 }
 
-/**
- * Retorna as datas de fatura que fecham amanhã, dado os cartões ativos.
- */
 export function alertaFaturaFechaAmanha(
-  cartoes: Cartao[],
+  cartoes: Array<{ id: string; diaFechamento: number }>,
   hoje: Date,
-): Cartao[] {
+): typeof cartoes {
   // TODO Fase 6 (runDailyChecks)
   void cartoes;
   void hoje;
   throw new Error("Não implementado");
 }
 
-/**
- * ROAS = soma das ENTRADAS da categoria ADS ÷ soma das SAIDAS da categoria ADS
- * no período informado.
- */
 export function calcularROAS(params: {
   entradas: number;
   gastoAds: number;
 }): number {
-  // TODO Fase 6
   if (params.gastoAds === 0) return 0;
   return params.entradas / params.gastoAds;
 }

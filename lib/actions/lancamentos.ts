@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import prisma from "@/lib/prisma";
+import { calcularParcelasCartao } from "@/lib/logic";
 import {
   TipoLancamento,
   Escopo,
@@ -203,8 +204,37 @@ export async function criarLancamento(
   }
 
   const d = parsed.data;
-  const dataLocal = new Date(d.data + "T12:00:00.000Z");
+  const dataCompra = new Date(d.data + "T12:00:00.000Z");
 
+  // Cartão de crédito: delega à lógica pura para calcular parcelas/competência
+  if (
+    d.formaPagamento === FormaPagamento.CARTAO_CREDITO &&
+    d.cartaoId
+  ) {
+    const cartao = await prisma.cartao.findUnique({ where: { id: d.cartaoId } });
+    if (!cartao) return { erro: "Cartão não encontrado." };
+
+    const grupoId = crypto.randomUUID();
+    const parcelas = calcularParcelasCartao({
+      categoriaId: d.categoriaId,
+      escopo: d.escopo,
+      descricao: d.descricao,
+      valor: d.valor,
+      dataCompra,
+      formaPagamento: d.formaPagamento,
+      cartaoId: d.cartaoId,
+      diaFechamento: cartao.diaFechamento,
+      totalParcelas: d.totalParcelas ?? 1,
+      grupoId,
+      origem: d.origem,
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await prisma.lancamento.createMany({ data: parcelas as any[] });
+    return { sucesso: true };
+  }
+
+  // Caminho padrão (PIX, débito, dinheiro, boleto, plataforma)
   await prisma.lancamento.create({
     data: {
       tipo: d.tipo,
@@ -212,7 +242,7 @@ export async function criarLancamento(
       categoriaId: d.categoriaId,
       descricao: d.descricao,
       valor: d.valor,
-      data: dataLocal,
+      data: dataCompra,
       formaPagamento: d.formaPagamento,
       cartaoId: d.cartaoId || null,
       parcela: d.parcela ?? null,

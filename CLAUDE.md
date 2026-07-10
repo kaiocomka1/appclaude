@@ -118,7 +118,12 @@ app/
       TabelaLancamentos.tsx    — Client: tabela com totais, edição inline, paginação por URL
       FormLancamento.tsx       — Client: form criar/editar usando useActionState
       BotaoNovoLancamento.tsx  — Client: toggle que abre FormLancamento para criação
-  cartoes/page.tsx        — Fase 3: gestão de cartões
+  cartoes/
+    page.tsx              — Fase 3: Server Component, carrega stats e lista
+    _components/
+      ListaCartoes.tsx    — Client: cards com limite/fatura, inline edit, toggle fatura
+      FormCartao.tsx      — Client: form criar/editar cartão usando useActionState
+      FaturaCartao.tsx    — Client: fatura detalhada por cartão e competência
   indicadores/page.tsx    — Fase 6: ROAS e métricas
   configuracoes/page.tsx  — Fase 6: configurações
   generated/prisma/       — cliente Prisma gerado (não editar)
@@ -130,7 +135,7 @@ lib/
   actions/
     lancamentos.ts        — listarLancamentos, criarLancamento, editarLancamento, cancelarLancamento
     categorias.ts         — listarCategorias
-    cartoes.ts            — listarCartoes
+    cartoes.ts            — listarCartoes, listarCartoesCompleto, listarCartoesComStats, listarFatura, criarCartao, editarCartao, desativarCartao, reativarCartao
   extrator/
     index.ts              — interface ExtratorDeNota + stubs QrCode e OCR
 
@@ -195,7 +200,7 @@ abrem em amarelo para revisão manual; a confirmação manual atualiza `RegraDes
 |---|---|---|
 | **1** | Setup: Prisma + schema + seed + estrutura de pastas + CLAUDE.md | ✅ Concluída |
 | **2** | Tabela de lançamentos com CRUD completo, filtros (tipo, escopo, categoria, data, status) e totais por período | ✅ Concluída |
-| **3** | Cartões: gestão de cartões, parcelamento via cartão de crédito, visão de fatura por competência | 🔜 |
+| **3** | Cartões: gestão de cartões, parcelamento via cartão de crédito, visão de fatura por competência | ✅ Concluída |
 | **4** | Antecipação e recebíveis: formulário próprio, geração de par ENTRADA+TAXA, cancelamento de recebíveis | 🔜 |
 | **5** | Leitura de foto em cascata: QR Code (jsQR) → OCR (Tesseract.js) → sugestão por RegraDesignacao | 🔜 |
 | **6** | Indicadores: ROAS, `runDailyChecks` (badge atrasado + alerta fatura), export CSV | 🔜 |
