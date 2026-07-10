@@ -11,6 +11,7 @@ import {
   TipoLancamento,
   StatusLancamento,
   OrigemLancamento,
+  FormaPagamento,
 } from "@/app/generated/prisma/enums";
 
 // ---------------------------------------------------------------------------
@@ -62,19 +63,27 @@ function dataParcela(
   const mesCompra = dataCompra.getUTCMonth(); // 0-indexed
   const anoCompra = dataCompra.getUTCFullYear();
 
-  // Se compra ocorreu após o fechamento, pula para o próximo ciclo
   const offsetBase = diaCompra > diaFechamento ? 1 : 0;
   const totalOffset = offsetBase + (numeroParcela - 1);
 
   const mesAbsoluto = mesCompra + totalOffset;
   const anoAlvo = anoCompra + Math.floor(mesAbsoluto / 12);
-  const mesAlvo = mesAbsoluto % 12; // 0-indexed
+  const mesAlvo = mesAbsoluto % 12;
 
-  // Garante que o dia não ultrapasse o último dia do mês alvo
   const ultimoDia = new Date(Date.UTC(anoAlvo, mesAlvo + 1, 0)).getUTCDate();
   const dia = Math.min(diaFechamento, ultimoDia);
 
   return new Date(Date.UTC(anoAlvo, mesAlvo, dia, 12, 0, 0, 0));
+}
+
+/** Avança uma data N meses, mantendo hora 12:00 UTC. */
+function addMeses(d: Date, n: number): Date {
+  const mesAbsoluto = d.getUTCMonth() + n;
+  const ano = d.getUTCFullYear() + Math.floor(mesAbsoluto / 12);
+  const mes = mesAbsoluto % 12;
+  const ultimoDia = new Date(Date.UTC(ano, mes + 1, 0)).getUTCDate();
+  const dia = Math.min(d.getUTCDate(), ultimoDia);
+  return new Date(Date.UTC(ano, mes, dia, 12, 0, 0, 0));
 }
 
 // ---------------------------------------------------------------------------
@@ -114,7 +123,6 @@ export function calcularParcelasCartao(params: {
     origem = OrigemLancamento.MANUAL,
   } = params;
 
-  // Distribui valor com arredondamento; última parcela absorve o centavo
   const valorParcela = Math.round((valor / totalParcelas) * 100) / 100;
   const valorUltima =
     Math.round((valor - valorParcela * (totalParcelas - 1)) * 100) / 100;
@@ -146,9 +154,14 @@ export function calcularParcelasCartao(params: {
 }
 
 // ---------------------------------------------------------------------------
-// Fase 4+: Stubs
+// Fase 4: Antecipação
 // ---------------------------------------------------------------------------
 
+/**
+ * Registra uma antecipação: gera ENTRADA (valor bruto, categoria ANTECIPACAO)
+ * e SAIDA (taxa = bruto − líquido, categoria TAXA_ANTECIPACAO) com mesmo grupoId.
+ * Se recebivelIds fornecidos, retorna-os na lista `cancelar`.
+ */
 export function calcularAntecipacao(params: {
   valorBruto: number;
   valorLiquido: number;
@@ -156,15 +169,81 @@ export function calcularAntecipacao(params: {
   grupoId: string;
   categoriaAntecipacaoId: string;
   categoriaTaxaId: string;
-  escopo: "PESSOAL" | "EMPRESARIAL";
+  escopo: string;
+  descricao?: string;
   recebivelIds?: string[];
 }): EfeitoLancamento {
-  // TODO Fase 4
-  void params;
-  throw new Error("Não implementado");
+  const {
+    valorBruto,
+    valorLiquido,
+    data,
+    grupoId,
+    categoriaAntecipacaoId,
+    categoriaTaxaId,
+    escopo,
+    descricao = "Antecipação",
+    recebivelIds = [],
+  } = params;
+
+  const valorTaxa = Math.round((valorBruto - valorLiquido) * 100) / 100;
+
+  const entrada: LancamentoParaCriar = {
+    tipo: TipoLancamento.ENTRADA,
+    escopo,
+    categoriaId: categoriaAntecipacaoId,
+    descricao,
+    valor: valorBruto,
+    data,
+    formaPagamento: FormaPagamento.PIX,
+    cartaoId: null,
+    parcela: null,
+    totalParcelas: null,
+    grupoId,
+    status: StatusLancamento.CONFIRMADO,
+    origem: OrigemLancamento.MANUAL,
+    anexoUrl: null,
+    hashAnexo: null,
+  };
+
+  const lancamentos: LancamentoParaCriar[] =
+    valorTaxa > 0
+      ? [
+          entrada,
+          {
+            tipo: TipoLancamento.SAIDA,
+            escopo,
+            categoriaId: categoriaTaxaId,
+            descricao: `Taxa — ${descricao}`,
+            valor: valorTaxa,
+            data,
+            formaPagamento: FormaPagamento.PIX,
+            cartaoId: null,
+            parcela: null,
+            totalParcelas: null,
+            grupoId,
+            status: StatusLancamento.CONFIRMADO,
+            origem: OrigemLancamento.MANUAL,
+            anexoUrl: null,
+            hashAnexo: null,
+          },
+        ]
+      : [entrada];
+
+  return { lancamentos, cancelar: recebivelIds };
 }
 
+// ---------------------------------------------------------------------------
+// Fase 4: Venda parcelada via plataforma
+// ---------------------------------------------------------------------------
+
+/**
+ * Registra uma venda parcelada via plataforma:
+ * - N ENTRADAS PREVISTAS (recebíveis) com valor bruto/N cada
+ * - 1 SAIDA CONFIRMADA de taxa (valorBruto × taxaPercentual / 100)
+ * Todas compartilham o mesmo grupoId.
+ */
 export function calcularVendaPlataforma(params: {
+  descricao: string;
   valorBruto: number;
   taxaPercentual: number;
   totalParcelas: number;
@@ -172,12 +251,76 @@ export function calcularVendaPlataforma(params: {
   grupoId: string;
   categoriaTaxaPlataformaId: string;
   categoriaVendaId: string;
-  escopo: "PESSOAL" | "EMPRESARIAL";
+  escopo: string;
 }): LancamentoParaCriar[] {
-  // TODO Fase 4
-  void params;
-  throw new Error("Não implementado");
+  const {
+    descricao,
+    valorBruto,
+    taxaPercentual,
+    totalParcelas,
+    dataInicial,
+    grupoId,
+    categoriaTaxaPlataformaId,
+    categoriaVendaId,
+    escopo,
+  } = params;
+
+  const valorTaxa = Math.round((valorBruto * taxaPercentual) / 100 * 100) / 100;
+  const valorParcela = Math.round((valorBruto / totalParcelas) * 100) / 100;
+  const valorUltima =
+    Math.round((valorBruto - valorParcela * (totalParcelas - 1)) * 100) / 100;
+
+  const recebiveis: LancamentoParaCriar[] = Array.from(
+    { length: totalParcelas },
+    (_, i) => {
+      const numero = i + 1;
+      return {
+        tipo: TipoLancamento.ENTRADA,
+        escopo,
+        categoriaId: categoriaVendaId,
+        descricao:
+          totalParcelas === 1
+            ? descricao
+            : `${descricao} (${numero}/${totalParcelas})`,
+        valor: numero === totalParcelas ? valorUltima : valorParcela,
+        data: addMeses(dataInicial, i),
+        formaPagamento: FormaPagamento.PLATAFORMA,
+        cartaoId: null,
+        parcela: totalParcelas > 1 ? numero : null,
+        totalParcelas: totalParcelas > 1 ? totalParcelas : null,
+        grupoId,
+        status: StatusLancamento.PREVISTO,
+        origem: OrigemLancamento.MANUAL,
+        anexoUrl: null,
+        hashAnexo: null,
+      };
+    },
+  );
+
+  const taxa: LancamentoParaCriar = {
+    tipo: TipoLancamento.SAIDA,
+    escopo,
+    categoriaId: categoriaTaxaPlataformaId,
+    descricao: `Taxa plataforma — ${descricao} (${taxaPercentual}%)`,
+    valor: valorTaxa,
+    data: dataInicial,
+    formaPagamento: FormaPagamento.PLATAFORMA,
+    cartaoId: null,
+    parcela: null,
+    totalParcelas: null,
+    grupoId,
+    status: StatusLancamento.CONFIRMADO,
+    origem: OrigemLancamento.MANUAL,
+    anexoUrl: null,
+    hashAnexo: null,
+  };
+
+  return valorTaxa > 0 ? [...recebiveis, taxa] : recebiveis;
 }
+
+// ---------------------------------------------------------------------------
+// Fase 6+: Stubs
+// ---------------------------------------------------------------------------
 
 export function identificarPrevistoAtrasado(
   lancamentos: Array<{ id: string; status: string; data: Date }>,

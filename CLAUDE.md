@@ -124,6 +124,16 @@ app/
       ListaCartoes.tsx    — Client: cards com limite/fatura, inline edit, toggle fatura
       FormCartao.tsx      — Client: form criar/editar cartão usando useActionState
       FaturaCartao.tsx    — Client: fatura detalhada por cartão e competência
+  antecipacao/
+    page.tsx              — Fase 4: Server Component, carrega recebíveis PREVISTOS
+    _components/
+      AntecipacaoClient.tsx — Client: wrapper com estado de sucesso/reset
+      FormAntecipacao.tsx   — Client: form com bruto/líquido + checklist de recebíveis
+  venda/
+    page.tsx              — Fase 4: Server Component, carrega categorias ENTRADA
+    _components/
+      VendaClient.tsx     — Client: wrapper com estado de sucesso/reset
+      FormVenda.tsx       — Client: form de venda parcelada com preview de valores
   indicadores/page.tsx    — Fase 6: ROAS e métricas
   configuracoes/page.tsx  — Fase 6: configurações
   generated/prisma/       — cliente Prisma gerado (não editar)
@@ -136,6 +146,7 @@ lib/
     lancamentos.ts        — listarLancamentos, criarLancamento, editarLancamento, cancelarLancamento
     categorias.ts         — listarCategorias
     cartoes.ts            — listarCartoes, listarCartoesCompleto, listarCartoesComStats, listarFatura, criarCartao, editarCartao, desativarCartao, reativarCartao
+    operacoes.ts          — listarRecebiveis, registrarAntecipacao, registrarVendaPlataforma
   extrator/
     index.ts              — interface ExtratorDeNota + stubs QrCode e OCR
 
@@ -201,7 +212,7 @@ abrem em amarelo para revisão manual; a confirmação manual atualiza `RegraDes
 | **1** | Setup: Prisma + schema + seed + estrutura de pastas + CLAUDE.md | ✅ Concluída |
 | **2** | Tabela de lançamentos com CRUD completo, filtros (tipo, escopo, categoria, data, status) e totais por período | ✅ Concluída |
 | **3** | Cartões: gestão de cartões, parcelamento via cartão de crédito, visão de fatura por competência | ✅ Concluída |
-| **4** | Antecipação e recebíveis: formulário próprio, geração de par ENTRADA+TAXA, cancelamento de recebíveis | 🔜 |
+| **4** | Antecipação e recebíveis: formulário próprio, geração de par ENTRADA+TAXA, cancelamento de recebíveis | ✅ Concluída |
 | **5** | Leitura de foto em cascata: QR Code (jsQR) → OCR (Tesseract.js) → sugestão por RegraDesignacao | 🔜 |
 | **6** | Indicadores: ROAS, `runDailyChecks` (badge atrasado + alerta fatura), export CSV | 🔜 |
 
