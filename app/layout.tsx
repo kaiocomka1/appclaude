@@ -58,6 +58,12 @@ export default function RootLayout({
             >
               Antecipação
             </Link>
+            <Link
+              href="/foto"
+              className="text-sm text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 transition"
+            >
+              Nota Fiscal
+            </Link>
           </div>
         </nav>
         {children}

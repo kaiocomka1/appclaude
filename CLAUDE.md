@@ -134,6 +134,12 @@ app/
     _components/
       VendaClient.tsx     — Client: wrapper com estado de sucesso/reset
       FormVenda.tsx       — Client: form de venda parcelada com preview de valores
+  foto/
+    page.tsx              — Fase 5: Server Component, carrega categorias e cartões
+    _components/
+      FotoClient.tsx      — Client: orquestrador de etapas (CAPTURA→PROCESSANDO→REVISAO→SUCESSO)
+      FotoCaptura.tsx     — Client: câmera + loop jsQR 5fps + moldura + fallback OCR
+      FotoRevisao.tsx     — Client: formulário de revisão com campos amarelos para confiança < 0,85
   indicadores/page.tsx    — Fase 6: ROAS e métricas
   configuracoes/page.tsx  — Fase 6: configurações
   generated/prisma/       — cliente Prisma gerado (não editar)
@@ -147,8 +153,9 @@ lib/
     categorias.ts         — listarCategorias
     cartoes.ts            — listarCartoes, listarCartoesCompleto, listarCartoesComStats, listarFatura, criarCartao, editarCartao, desativarCartao, reativarCartao
     operacoes.ts          — listarRecebiveis, registrarAntecipacao, registrarVendaPlataforma
+    foto.ts               — verificarDuplicata, buscarSugestao, salvarRegra, salvarDaFoto
   extrator/
-    index.ts              — interface ExtratorDeNota + stubs QrCode e OCR
+    index.ts              — ExtratorDeNota, QrCodeExtrator (jsQR+BrasilAPI), OcrExtrator (Tesseract.js)
 
 prisma/
   schema.prisma           — schema completo
@@ -213,7 +220,7 @@ abrem em amarelo para revisão manual; a confirmação manual atualiza `RegraDes
 | **2** | Tabela de lançamentos com CRUD completo, filtros (tipo, escopo, categoria, data, status) e totais por período | ✅ Concluída |
 | **3** | Cartões: gestão de cartões, parcelamento via cartão de crédito, visão de fatura por competência | ✅ Concluída |
 | **4** | Antecipação e recebíveis: formulário próprio, geração de par ENTRADA+TAXA, cancelamento de recebíveis | ✅ Concluída |
-| **5** | Leitura de foto em cascata: QR Code (jsQR) → OCR (Tesseract.js) → sugestão por RegraDesignacao | 🔜 |
+| **5** | Leitura de foto em cascata: QR Code (jsQR) → OCR (Tesseract.js) → sugestão por RegraDesignacao | ✅ Concluída |
 | **6** | Indicadores: ROAS, `runDailyChecks` (badge atrasado + alerta fatura), export CSV | 🔜 |
 
 ---
